@@ -1,0 +1,17 @@
+.alerts-center {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.alerts-header {
+  margin-bottom: 24px;
+}
+
+.ant-table-row {
+  cursor: pointer;
+}
+
+.ant-table-row:hover {
+  background-color: #fafafa;
+}
+

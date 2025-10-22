@@ -1,0 +1,112 @@
+flowchart TD
+  %% ========= ENTRY =========
+  A0[Launch Sun Gazer] --> A1{API keys on device?}
+  A1 -- No --> A2[First-Run Setup Wizard<br/>• Enter keys (Enphase/SolarEdge/Generac/Tigo/CPS)<br/>• Validate each key<br/>• Secure local store]
+  A2 --> A3[Go to Fleet Dashboard]
+  A1 -- Yes --> A3[Go to Fleet Dashboard]
+
+  %% ========= HOME / FLEET =========
+  subgraph UI[Desktop UI (React/Electron)]
+    direction TB
+    A3 --> H0[ Fleet Dashboard (Home) ]
+    H0 --- H0b[[Top Bars:<br/>Filters (Vendor/Status/Date/Location/Has Alerts)<br/>Search (Name/Address/Site ID)<br/>Sort (Name/Commission/Update/Peak kW)]]
+    H0 -->|click card| S0[Site Detail]
+    H0 --> AC0[Alerts Center]
+    H0 --> SV0[Saved Views & Presets]
+    H0 --> MAP0[Map View (optional)]
+    H0 --> SET0[Settings]
+    H0 --> DIA0[Diagnostics]
+    H0 --> NR0[Notification Rules (optional)]
+
+    %% Health Scores appear in Dashboard tiles and Site Overview
+    H0 --- HS0[(Health Score badges per site)]
+
+    %% ========= SAVED VIEWS =========
+    SV0 --- SV1[Save current filters/sort as preset]
+    SV0 --- SV2[Load preset (e.g., "Generac Only", "High Severity/24h")]
+
+    %% ========= ALERTS CENTER =========
+    AC0 --- AC1[Unified alert inbox<br/>• Filter: Severity/Vendor/Site/Date<br/>• Bulk mark reviewed<br/>• Export selected]
+    AC0 -->|open context| S0
+
+    %% ========= MAP VIEW (optional) =========
+    MAP0 --- MAP1[Plot sites by lat/long with clustering + filters]
+
+    %% ========= SITE DETAIL =========
+    subgraph SITE[Site Detail (Tabbed)]
+      direction TB
+      S0 --> T0[Overview<br/>• Status, last update<br/>• Production snapshot<br/>• Health Score<br/>• Quick actions]
+      S0 --> T1[Devices<br/>• Inverters/Micros list<br/>• Status + drill-in]
+      S0 --> T2[Alerts (per-site)<br/>• Normalized, filterable<br/>• Mark reviewed (local)]
+      S0 --> T3[Energy / Production<br/>• Daily/Weekly/Monthly charts<br/>• From local cache]
+      S0 --> T4[Panel Schematic<br/>• Render in vendor-returned order<br/>• Schematic disclaimer]
+      S0 --> T5[History / Timeline<br/>• Alerts, recoveries, polling failures]
+      S0 --> T6[Notes & Aliases (local overrides)]
+    end
+
+    %% ========= SETTINGS =========
+    subgraph SETTINGS[Settings]
+      direction TB
+      SET0 --> SET1[API Keys<br/>• Add/Rotate/Test/Remove per vendor]
+      SET0 --> SET2[Polling & Caching<br/>• Intervals • Per-vendor throttles • Retention windows]
+      SET0 --> SET3[Backup/Export & Import<br/>• CSV/JSON for sites/alerts/metrics • Import notes/presets]
+      SET0 --> SET4[App Updates<br/>• Check version • Release notes]
+      SET0 --> SET5[Appearance<br/>• Light/Dark • Density]
+      SET0 --> SET6[About/Support<br/>• Version • Paths (DB/logs)]
+    end
+
+    %% ========= DIAGNOSTICS =========
+    subgraph DIAG[Diagnostics]
+      direction TB
+      DIA0 --> D1[Connectivity<br/>• Per-vendor heartbeat • Last success • Latency]
+      DIA0 --> D2[Rate Limits & Backoff<br/>• e.g., SolarEdge quotas<br/>• Next refresh ETA]
+      DIA0 --> D3[Error Log<br/>• Normalized errors • Copyable payload snippets]
+    end
+
+    %% ========= NOTIFICATION RULES =========
+    NR0 --- NR1[Local toasts/badges for new critical alerts (optional)]
+  end
+
+  %% ========= HEALTH SCORES (COMPUTED) =========
+  subgraph HS[Health Scores (KPI)]
+    direction TB
+    HS0 -. shown on .-> H0
+    HS0 -. and on .-> T0
+    HS1[Computation Inputs:<br/>• Recent alert severity mix<br/>• Availability/uptime<br/>• Energy vs. expected (if available)<br/>• Data freshness (poll success rate)]
+  end
+
+  %% ========= BACKEND =========
+  subgraph BE[Backend (FastAPI + Python)]
+    direction TB
+    BAPI[REST Endpoints<br/>/sites /alerts /energy /layout /healthscore ...]
+    DB[(SQLite Local Cache)]
+    NORM[Normalization Layer]
+    SCHD[APScheduler Polling]
+    CONN[Vendor Connectors]
+    BAPI <--> DB
+    NORM <--> DB
+    SCHD --> CONN --> NORM
+
+    %% Specific connectors
+    subgraph VENDORS[Vendor Connectors]
+      direction LR
+      ENP[Enphase API]
+      SED[SolarEdge API<br/>(rate limits)]
+      GEN[Generac Session (best-effort)]
+      TIG[Tigo API]
+      CPS[CPS Open API]
+    end
+  end
+
+  %% ========= UI ↔ BACKEND LINKS =========
+  UI <--> BAPI
+  HS1 --> NORM
+  %% Health score calc reads normalized metrics from DB
+  NORM --> HS1
+  DB --> BAPI
+
+  %% ========= DATA FLOW (high level) =========
+  CONN -. poll/push .-> NORM -. write .-> DB -. read .-> BAPI -. JSON .-> UI
+
+
+## NOTE: WE CAN KEEP A LOG OF WHEN DATA WAS FETCHED IN SQLLITE DB/CACHE; IF DATA IS PAST A SPECFIC TIME LIMIT, POTENTIALLY REFETCH. APSCHEDULER POLLING MAY BE A BETTER WAY.

@@ -1,0 +1,328 @@
+☀️ SolarEdge Monitoring Server API Developer Guidelines
+
+Last updated: August 2022
+
+📘 Overview
+
+The SolarEdge Monitoring Server API provides a RESTful interface for accessing SolarEdge’s cloud-based monitoring platform data.
+It enables integration with other systems for data analysis, fleet management, and visualization of site and equipment performance.
+
+API Base URL:
+
+https://monitoringapi.solaredge.com
+
+📋 Table of Contents
+
+General Information
+
+API Access & Security
+
+Request & Response Formats
+
+Error Handling
+
+Usage Limitations
+
+API Endpoints
+
+Site Data APIs
+
+Equipment APIs
+
+Account APIs
+
+Meters & Sensors APIs
+
+Versioning
+
+Data Types
+
+General Information
+Purpose and Scope
+
+This API allows developers to access and interact with data from the SolarEdge monitoring system securely, enabling external applications to display and analyze site data.
+
+Acronyms
+Abbreviation Meaning
+API Application Programming Interface
+WS Web Services
+REST Representational State Transfer
+CSV Comma Separated Values
+JSON JavaScript Object Notation
+XML Extensible Markup Language
+Revision History
+Date Update
+Aug 2022 Updated documentation of Inverter Technical Data endpoint
+Jan 2019 Added Meters API; updated Storage and Inverter Technical Data APIs
+Feb 2018 Added disable/enable site access by account
+Sep 2017 Parameter updates
+Jun 2016 Added StorEdge profiles API
+Apr 2016 Added status filter for alerts API
+Technical Information
+RESTful Design Principles
+
+Resource-oriented URLs
+
+Standard HTTP verbs and response codes
+
+Parameters passed via URL
+
+Supports JSON, XML, and CSV formats
+
+Example:
+
+GET /site/{siteId}/details?api_key={API_KEY}
+
+API Access & Security
+API Key Types
+
+Account API Key → Access to all sites under an account
+
+Site API Key → Access limited to a specific site
+
+HTTPS only is supported (both 1.0 and 1.1).
+
+Example:
+
+https://monitoringapi.solaredge.com/sites/list?api_key=YOUR_KEY
+
+Security Guidelines
+
+Never share or expose API keys in public repositories or client-side code.
+
+Use backend services for requests.
+
+Rotate API keys every 6 months.
+
+Prefer Site-level keys when granting access to third parties.
+
+Request & Response Formats
+Supported Response Types
+Format MIME Type
+JSON application/json
+XML application/xml
+CSV text/csv
+
+Default: JSON
+
+JSONP Support
+
+Add a callback parameter for JSONP requests.
+
+Example:
+
+GET /site/{siteId}/details.json?api_key=KEY&callback=myFunc
+
+Response:
+
+myFunc({"details": {...}});
+
+Error Handling
+HTTP Code Meaning
+400 Bad Request
+403 Forbidden (validation or limit violation)
+404 Not Found
+406 Invalid media type
+429 Too many requests
+Usage Limitations
+Type Limit
+Daily requests per account 300
+Daily requests per site 300
+Concurrent calls per IP 3
+Bulk request limit 100 site IDs
+
+If exceeded → HTTP 429 Too Many Requests
+
+API Endpoints
+🌐 Site Data APIs
+
+1. Site List
+
+GET /sites/list
+
+Retrieve a paginated list of sites.
+
+Parameters:
+
+size (default 100)
+
+startIndex
+
+searchText
+
+sortProperty (e.g. Name, Country, City)
+
+sortOrder (ASC / DESC)
+
+status (Active, Pending, etc.)
+
+2. Site Details
+
+GET /site/{siteId}/details
+
+Returns site details: name, status, type, address, and alert info.
+
+3. Data Period
+
+GET /site/{siteId}/dataPeriod
+
+Returns site energy production start and end dates.
+
+4. Site Energy
+
+GET /site/{siteId}/energy
+
+Returns site energy data by time unit (DAY, HOUR, etc.).
+
+Limit:
+
+Up to 1 year (DAY)
+
+Up to 1 month (HOUR or QUARTER_OF_AN_HOUR)
+
+5. Site Power
+
+GET /site/{siteId}/power
+
+15-minute power data samples.
+
+Limit: 1 month per request.
+
+6. Site Overview
+
+GET /site/{siteId}/overview
+
+Summarized statistics:
+
+Current power
+
+Energy (daily, monthly, lifetime)
+
+Lifetime revenue
+
+7. Power Flow
+
+GET /site/{siteId}/currentPowerFlow
+
+Live power flow between PV, grid, storage, and consumption.
+
+8. Storage Data
+
+GET /site/{siteId}/storageData
+
+Battery information:
+
+Charge/discharge power
+
+Lifetime energy
+
+Internal temperature
+
+State of charge (%)
+
+Limit: 7 days
+
+9. Environmental Benefits
+
+GET /site/{siteId}/envBenefits
+
+Returns estimated environmental impact:
+
+CO₂ saved
+
+Trees planted
+
+Lightbulbs powered
+
+⚙️ Site Equipment APIs
+Components List
+
+GET /equipment/{siteId}/list
+
+Lists inverters/SMIs:
+name, manufacturer, model, serialNumber.
+
+Inventory
+
+GET /site/{siteId}/inventory
+
+Lists all site equipment:
+Inverters, meters, batteries, sensors, and gateways.
+
+Inverter Technical Data
+
+GET /equipment/{siteId}/{serialNumber}/data
+
+Returns inverter parameters:
+
+AC/DC voltage/current
+
+Power
+
+Frequency
+
+Temperature
+
+Operating mode (e.g., MPPT, Off-grid)
+
+Limit: 1 week.
+
+Equipment Change Log
+
+GET /equipment/{siteId}/{serialNumber}/changeLog
+
+Shows component replacements with date and serial info.
+
+👥 Account API
+
+GET /accounts/list
+List all accounts and sub-accounts for an API key.
+Supports pagination, sorting, and filtering by name or location.
+
+⚡ Meters & Sensors APIs
+Meters
+
+GET /site/{siteId}/meters
+
+Returns meter readings, lifetime energy, and device connection metadata.
+
+Sensors
+
+GET /equipment/{siteId}/sensors
+Lists all sensors and associated devices.
+GET /site/{siteId}/sensors
+Retrieves sensor telemetry data (limited to 1 week).
+
+Versioning
+API URL Example
+Current Version /version/current { "version": "1.0.0" }
+Supported Versions /version/supported { "supported": ["0.9.5","1.0.0"] }
+
+Version format: <major>.<minor>.<release>
+
+Data Types
+Time Units
+
+DAY, WEEK, MONTH, YEAR
+
+Site Status
+
+Active
+
+Pending Communication
+
+Site Type
+
+Optimizers & Inverters
+
+Safety & Monitoring Interface
+
+Monitoring Combiner Boxes
+
+📞 Support
+
+Email: support@solaredge.com
+
+Logo attribution required: http://solaredge.com
+
+Terms: SolarEdge API License
