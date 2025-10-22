@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import uuid
 
 from app.models import Site, Device, Alert, TimeseriesMetric
-from app.connectors import EnphaseConnector, SolarEdgeConnector
+from app.connectors import EnphaseConnector, SolarEdgeConnector, GeneracConnector
 from loguru import logger
 
 
@@ -20,6 +20,10 @@ class DataService:
     def fetch_all_sites(self, vendor: str, api_key: str) -> List[Site]:
         """
         Fetch all sites from a vendor and store in database
+        
+        Args:
+            vendor: Vendor name (SolarEdge, Enphase, Generac)
+            api_key: API key or account ID (for Generac, use account ID)
         """
         try:
             if vendor == "SolarEdge":
@@ -27,6 +31,9 @@ class DataService:
                 raw_sites = connector.get_sites()
             elif vendor == "Enphase":
                 connector = EnphaseConnector(api_key)
+                raw_sites = connector.get_sites()
+            elif vendor == "Generac":
+                connector = GeneracConnector(api_key)  # api_key is account_id for Generac
                 raw_sites = connector.get_sites()
             else:
                 logger.warning(f"Unsupported vendor: {vendor}")
@@ -68,6 +75,9 @@ class DataService:
                 connector = EnphaseConnector(api_key)
                 # Enphase doesn't have a direct overview endpoint
                 overview = {}
+            elif vendor == "Generac":
+                connector = GeneracConnector(api_key)
+                overview = connector.get_site_overview(site_id)
             else:
                 return None
             
@@ -97,6 +107,9 @@ class DataService:
                 raw_devices = connector.get_devices(site_id)
             elif vendor == "Enphase":
                 connector = EnphaseConnector(api_key)
+                raw_devices = connector.get_devices(site_id)
+            elif vendor == "Generac":
+                connector = GeneracConnector(api_key)
                 raw_devices = connector.get_devices(site_id)
             else:
                 return []

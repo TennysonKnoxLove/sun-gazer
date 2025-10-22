@@ -83,7 +83,7 @@ class SolarEdgeConnector(BaseConnector):
                 "vendor_site_id": str(site["id"]),
                 "name": site.get("name", "Unknown Site"),
                 "status": self._map_status(site.get("status")),
-                "peak_power_kw": site.get("peakPower", 0) / 1000,  # Convert W to kW
+                "peak_power_kw": site.get("peakPower", 0),  # Already in kW
                 "address": {
                     "street": site.get("location", {}).get("address"),
                     "city": site.get("location", {}).get("city"),
@@ -112,7 +112,7 @@ class SolarEdgeConnector(BaseConnector):
         return {
             "name": details.get("name"),
             "status": self._map_status(details.get("status")),
-            "peak_power_kw": details.get("peakPower", 0) / 1000,
+            "peak_power_kw": details.get("peakPower", 0),  # Already in kW
             "installation_date": details.get("installationDate"),
             "address": {
                 "street": details.get("location", {}).get("address"),

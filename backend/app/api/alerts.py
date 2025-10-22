@@ -52,26 +52,6 @@ def get_all_alerts(
     return result
 
 
-@router.get("/{site_id}/alerts")
-def get_site_alerts(site_id: str, db: Session = Depends(get_db)):
-    """Get all alerts for a specific site"""
-    alerts = db.query(Alert).filter(Alert.site_id == site_id)\
-        .order_by(Alert.timestamp.desc()).all()
-    
-    return [
-        {
-            "id": alert.id,
-            "site_id": alert.site_id,
-            "device_id": alert.device_id,
-            "vendor": alert.vendor,
-            "severity": alert.severity,
-            "code": alert.code,
-            "description": alert.description,
-            "status": alert.status,
-            "timestamp": alert.timestamp.isoformat() if alert.timestamp else None
-        }
-        for alert in alerts
-    ]
 
 
 @router.patch("/{alert_id}/acknowledge")

@@ -7,7 +7,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 
 from app.core.database import get_db
-from app.models import Site, Device, TimeseriesMetric
+from app.models import Site, Device, TimeseriesMetric, Alert
 from app.services.data_service import DataService
 
 router = APIRouter()
@@ -17,9 +17,11 @@ router = APIRouter()
 def get_all_sites(
     vendor: Optional[str] = None,
     status: Optional[str] = None,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db)
 ):
-    """Get all sites with optional filtering"""
+    """Get all sites with optional filtering and pagination"""
     query = db.query(Site)
     
     if vendor:
@@ -27,24 +29,42 @@ def get_all_sites(
     if status:
         query = query.filter(Site.status == status)
     
-    sites = query.all()
+    # Get total count before pagination
+    total_count = query.count()
     
-    return [
-        {
-            "id": site.id,
-            "name": site.name,
-            "vendor": site.vendor,
-            "vendor_site_id": site.vendor_site_id,
-            "status": site.status,
-            "peak_power_kw": site.peak_power_kw,
-            "current_power_kw": site.current_power_kw,
-            "daily_production_kwh": site.daily_production_kwh,
-            "health_score": site.health_score,
-            "address": site.address_json,
-            "last_updated": site.last_updated.isoformat() if site.last_updated else None
+    # Apply pagination
+    offset = (page - 1) * page_size
+    sites = query.offset(offset).limit(page_size).all()
+    
+    # Calculate pagination metadata
+    total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
+    
+    return {
+        "sites": [
+            {
+                "id": site.id,
+                "name": site.name,
+                "vendor": site.vendor,
+                "vendor_site_id": site.vendor_site_id,
+                "status": site.status,
+                "peak_power_kw": site.peak_power_kw,
+                "current_power_kw": site.current_power_kw,
+                "daily_production_kwh": site.daily_production_kwh,
+                "health_score": site.health_score,
+                "address": site.address_json,
+                "last_updated": site.last_updated.isoformat() if site.last_updated else None
+            }
+            for site in sites
+        ],
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1
         }
-        for site in sites
-    ]
+    }
 
 
 @router.get("/{site_id}")
@@ -180,6 +200,28 @@ def get_site_layout(site_id: str, db: Session = Depends(get_db)):
             "status": device.status
         }
         for device in devices
+    ]
+
+
+@router.get("/{site_id}/alerts")
+def get_site_alerts(site_id: str, db: Session = Depends(get_db)):
+    """Get all alerts for a specific site"""
+    alerts = db.query(Alert).filter(Alert.site_id == site_id)\
+        .order_by(Alert.timestamp.desc()).all()
+    
+    return [
+        {
+            "id": alert.id,
+            "site_id": alert.site_id,
+            "device_id": alert.device_id,
+            "vendor": alert.vendor,
+            "severity": alert.severity,
+            "code": alert.code,
+            "description": alert.description,
+            "status": alert.status,
+            "timestamp": alert.timestamp.isoformat() if alert.timestamp else None
+        }
+        for alert in alerts
     ]
 
 
