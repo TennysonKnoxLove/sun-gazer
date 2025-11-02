@@ -66,6 +66,21 @@ export interface TimeseriesMetric {
   metric_name: string;
 }
 
+// Power Flow data (SolarEdge)
+export interface PowerFlow {
+  site_id: string;
+  site_name: string;
+  supported: boolean;
+  pv_power_kw: number;
+  load_power_kw: number;
+  grid_power_kw: number;
+  storage_power_kw: number;
+  storage_level_percent: number;
+  status: string;
+  last_update: string | null;
+  unit: string;
+}
+
 // API Key
 export interface ApiKey {
   id: string;

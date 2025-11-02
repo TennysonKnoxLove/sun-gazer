@@ -33,8 +33,13 @@ export const dashboardApi = {
 
 // Sites endpoints
 export const sitesApi = {
-  getAll: async (): Promise<Site[]> => {
-    const response = await api.get('/api/sites');
+  getAll: async (params?: {
+    vendor?: string;
+    status?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<{ sites: Site[]; pagination: any }> => {
+    const response = await api.get('/api/sites', { params });
     return response.data;
   },
   
@@ -62,6 +67,11 @@ export const sitesApi = {
   
   getLayout: async (id: string): Promise<Device[]> => {
     const response = await api.get(`/api/sites/${id}/layout`);
+    return response.data;
+  },
+  
+  getPowerFlow: async (id: string): Promise<any> => {
+    const response = await api.get(`/api/sites/${id}/power-flow`);
     return response.data;
   },
   

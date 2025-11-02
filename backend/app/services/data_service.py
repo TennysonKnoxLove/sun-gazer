@@ -66,11 +66,22 @@ class DataService:
     def fetch_site_overview(self, site_id: str, vendor: str, api_key: str) -> Optional[Site]:
         """
         Fetch site overview and update database
+        
+        For SolarEdge, we fetch both overview (for energy totals) and 
+        power flow (for real-time PV/battery/load data)
         """
         try:
             if vendor == "SolarEdge":
                 connector = SolarEdgeConnector(api_key)
                 overview = connector.get_site_overview(site_id)
+                
+                # Get real-time power flow data - this is the KEY to accurate current power
+                power_flow = connector.get_power_flow(site_id)
+                
+                # Use PV power from power flow as the actual current production
+                # This is what you see in the monitoring app (panels producing 0.4 kW, etc.)
+                overview['current_power_kw'] = power_flow.get('pv_power_kw', overview.get('current_power_kw', 0))
+                
             elif vendor == "Enphase":
                 connector = EnphaseConnector(api_key)
                 # Enphase doesn't have a direct overview endpoint

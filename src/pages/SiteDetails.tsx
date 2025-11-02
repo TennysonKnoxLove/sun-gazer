@@ -32,6 +32,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { sitesApi, alertsApi } from '../services/api';
 import type { Site, Device, Alert, TimeseriesMetric } from '../types';
+import { formatPowerAdaptive, formatEnergyAdaptive } from '../utils/formatters';
 import dayjs from 'dayjs';
 import './SiteDetails.css';
 
@@ -279,20 +280,20 @@ const SiteDetails = () => {
               <Card title="Key Performance Indicators" style={{ marginTop: 24 }}>
                 <Row gutter={[16, 16]}>
                   <Col span={12}>
-                    <Statistic
-                      title="Total Production Today"
-                      value={site.daily_production_kwh}
-                      suffix="kWh"
-                      valueStyle={{ fontSize: 20 }}
-                    />
+                    <div style={{ marginBottom: 8 }}>
+                      <Text type="secondary">Total Production Today</Text>
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 600 }}>
+                      {formatEnergyAdaptive(site.daily_production_kwh)}
+                    </div>
                   </Col>
                   <Col span={12}>
-                    <Statistic
-                      title="Current Power"
-                      value={site.current_power_kw}
-                      suffix="kW"
-                      valueStyle={{ fontSize: 20 }}
-                    />
+                    <div style={{ marginBottom: 8 }}>
+                      <Text type="secondary">Current Power</Text>
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 600 }}>
+                      {formatPowerAdaptive(site.current_power_kw)}
+                    </div>
                   </Col>
                   <Col span={12}>
                     <Statistic
@@ -389,29 +390,32 @@ const SiteDetails = () => {
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
             <Col span={8}>
               <Card>
-                <Statistic
-                  title="Today's Production"
-                  value={site.daily_production_kwh}
-                  suffix="kWh"
-                />
+                <div style={{ marginBottom: 8 }}>
+                  <Text type="secondary">Today's Production</Text>
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 600 }}>
+                  {formatEnergyAdaptive(site.daily_production_kwh)}
+                </div>
               </Card>
             </Col>
             <Col span={8}>
               <Card>
-                <Statistic
-                  title="This Week"
-                  value={(site.daily_production_kwh * 7).toFixed(0)}
-                  suffix="kWh"
-                />
+                <div style={{ marginBottom: 8 }}>
+                  <Text type="secondary">This Week</Text>
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 600 }}>
+                  {formatEnergyAdaptive(site.daily_production_kwh * 7)}
+                </div>
               </Card>
             </Col>
             <Col span={8}>
               <Card>
-                <Statistic
-                  title="This Month"
-                  value={(site.daily_production_kwh * 30).toFixed(0)}
-                  suffix="kWh"
-                />
+                <div style={{ marginBottom: 8 }}>
+                  <Text type="secondary">This Month</Text>
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 600 }}>
+                  {formatEnergyAdaptive(site.daily_production_kwh * 30)}
+                </div>
               </Card>
             </Col>
           </Row>

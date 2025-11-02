@@ -5,14 +5,14 @@ import {
   Row,
   Col,
   Select,
-  Input,
   Statistic,
   Badge,
   Typography,
   Button,
   Space,
-  Tag,
   Progress,
+  Pagination,
+  Alert,
 } from 'antd';
 import {
   DashboardOutlined,
@@ -22,11 +22,13 @@ import {
   ArrowDownOutlined,
   EnvironmentOutlined,
   ReloadOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { useMachine } from '@xstate/react';
 import { pollingMachine } from '../machines/pollingMachine';
-import { dashboardApi, sitesApi } from '../services/api';
+import { dashboardApi, sitesApi, settingsApi } from '../services/api';
 import type { Site, DashboardStats } from '../types';
+import { formatPowerAdaptive, formatEnergyAdaptive } from '../utils/formatters';
 import './FleetDashboard.css';
 
 const { Title, Text } = Typography;
@@ -37,6 +39,10 @@ const FleetDashboard = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState<boolean>(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
   const [filters, setFilters] = useState({
     vendor: 'all',
     status: 'all',
@@ -45,6 +51,7 @@ const FleetDashboard = () => {
   const [sortBy, setSortBy] = useState('name');
 
   useEffect(() => {
+    checkApiKeys();
     fetchDashboard();
     send({ type: 'START_POLLING', intervalMs: 15 * 60 * 1000, maxPolls: 3 });
 
@@ -53,15 +60,26 @@ const FleetDashboard = () => {
     };
   }, []);
 
+  useEffect(() => {
+    fetchSites();
+  }, [currentPage, pageSize, filters.vendor, filters.status]);
+
+  const checkApiKeys = async () => {
+    try {
+      const apiKeys = await settingsApi.getApiKeys();
+      setHasApiKey(apiKeys && apiKeys.length > 0);
+    } catch (error) {
+      console.error('Failed to check API keys:', error);
+      setHasApiKey(false);
+    }
+  };
+
   const fetchDashboard = async () => {
     setLoading(true);
     try {
-      const [statsData, sitesData] = await Promise.all([
-        dashboardApi.getStats(),
-        sitesApi.getAll(),
-      ]);
+      const statsData = await dashboardApi.getStats();
       setStats(statsData);
-      setSites(sitesData);
+      await fetchSites();
       send({ type: 'FETCH_SUCCESS' });
     } catch (error) {
       console.error('Failed to fetch dashboard:', error);
@@ -71,14 +89,41 @@ const FleetDashboard = () => {
     }
   };
 
+  const fetchSites = async () => {
+    try {
+      const params: any = {
+        page: currentPage,
+        page_size: pageSize,
+      };
+      
+      if (filters.vendor !== 'all') {
+        params.vendor = filters.vendor;
+      }
+      if (filters.status !== 'all') {
+        params.status = filters.status;
+      }
+
+      const data = await sitesApi.getAll(params);
+      setSites(data.sites);
+      setTotalCount(data.pagination.total_count);
+    } catch (error) {
+      console.error('Failed to fetch sites:', error);
+    }
+  };
+
   const handleRefresh = async () => {
     await fetchDashboard();
     send({ type: 'MANUAL_REFRESH' });
   };
 
+  const handlePageChange = (page: number, pageSize?: number) => {
+    setCurrentPage(page);
+    if (pageSize) {
+      setPageSize(pageSize);
+    }
+  };
+
   const filteredSites = sites.filter((site) => {
-    if (filters.vendor !== 'all' && site.vendor !== filters.vendor) return false;
-    if (filters.status !== 'all' && site.status !== filters.status) return false;
     if (filters.score !== 'all') {
       if (filters.score === 'high' && site.health_score < 90) return false;
       if (filters.score === 'medium' && (site.health_score < 70 || site.health_score >= 90))
@@ -114,6 +159,25 @@ const FleetDashboard = () => {
           </Button>
         </Space>
       </div>
+
+      {/* API Key Warning */}
+      {!hasApiKey && (
+        <Alert
+          message="No API Key Configured"
+          description={
+            <span>
+              Your API key is missing or invalid. The data shown may be outdated. 
+              To view the most recent data, please{' '}
+              <a onClick={() => navigate('/settings')}>add a valid API key in Settings</a>.
+            </span>
+          }
+          type="warning"
+          icon={<WarningOutlined />}
+          showIcon
+          closable
+          style={{ marginBottom: 24 }}
+        />
+      )}
 
       {/* Filters */}
       <Card style={{ marginBottom: 24 }}>
@@ -223,17 +287,15 @@ const FleetDashboard = () => {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic
-              title="Total Production (Today)"
-              value={stats?.total_production_today_kwh || 0}
-              prefix={<ThunderboltOutlined />}
-              suffix="kWh"
-              valueStyle={{
-                color: stats?.change_from_yesterday && stats.change_from_yesterday > 0
-                  ? '#3f8600'
-                  : '#cf1322',
-              }}
-            />
+            <div style={{ marginBottom: 8 }}>
+              <Text type="secondary" style={{ fontSize: 14 }}>
+                <ThunderboltOutlined style={{ marginRight: 4 }} />
+                Total Production (Today)
+              </Text>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.2 }}>
+              {formatEnergyAdaptive(stats?.total_production_today_kwh || 0)}
+            </div>
             {stats?.change_from_yesterday !== undefined && (
               <div style={{ marginTop: 8 }}>
                 <Text type="secondary">
@@ -295,12 +357,12 @@ const FleetDashboard = () => {
                   <div>
                     <Text type="secondary">Daily Production:</Text>
                     <br />
-                    <Text strong>{site.daily_production_kwh.toFixed(0)} kWh</Text>
+                    <Text strong>{formatEnergyAdaptive(site.daily_production_kwh)}</Text>
                   </div>
                   <div>
                     <Text type="secondary">Current Power:</Text>
                     <br />
-                    <Text strong>{site.current_power_kw.toFixed(0)} kW</Text>
+                    <Text strong>{formatPowerAdaptive(site.current_power_kw)}</Text>
                   </div>
                 </div>
 
@@ -320,6 +382,21 @@ const FleetDashboard = () => {
         <Card style={{ textAlign: 'center', padding: 48 }}>
           <Text type="secondary">No sites match the current filters</Text>
         </Card>
+      )}
+
+      {/* Pagination */}
+      {totalCount > 0 && (
+        <div style={{ marginTop: 24, textAlign: 'center' }}>
+          <Pagination
+            current={currentPage}
+            pageSize={pageSize}
+            total={totalCount}
+            onChange={handlePageChange}
+            showSizeChanger
+            showTotal={(total, range) => `${range[0]}-${range[1]} of ${total} sites`}
+            pageSizeOptions={['10', '20', '50', '100']}
+          />
+        </div>
       )}
     </div>
   );

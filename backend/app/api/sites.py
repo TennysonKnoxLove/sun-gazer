@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
+from loguru import logger
 
 from app.core.database import get_db
 from app.models import Site, Device, TimeseriesMetric, Alert
@@ -223,6 +224,54 @@ def get_site_alerts(site_id: str, db: Session = Depends(get_db)):
         }
         for alert in alerts
     ]
+
+
+@router.get("/{site_id}/power-flow")
+def get_site_power_flow(site_id: str, db: Session = Depends(get_db)):
+    """
+    Get real-time power flow for a site (SolarEdge only)
+    
+    Returns:
+    - PV production (what panels are generating)
+    - Load/Consumption (what house is using)
+    - Grid flow (importing/exporting)
+    - Battery status (charging/discharging)
+    """
+    from app.models import ApiKey
+    from app.connectors import SolarEdgeConnector
+    
+    site = db.query(Site).filter(Site.id == site_id).first()
+    
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Get API key for this vendor
+    api_key = db.query(ApiKey).filter(ApiKey.vendor == site.vendor).first()
+    
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found for vendor")
+    
+    # Currently only SolarEdge supports power flow
+    if site.vendor != "SolarEdge":
+        return {
+            "supported": False,
+            "message": "Power flow data only available for SolarEdge sites"
+        }
+    
+    try:
+        connector = SolarEdgeConnector(api_key.key_encrypted)
+        power_flow = connector.get_power_flow(site_id)
+        connector.close()
+        
+        return {
+            "site_id": site_id,
+            "site_name": site.name,
+            "supported": True,
+            **power_flow
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch power flow for {site_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch power flow data")
 
 
 @router.post("/{site_id}/refresh")

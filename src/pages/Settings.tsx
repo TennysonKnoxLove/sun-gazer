@@ -72,27 +72,49 @@ const Settings = () => {
 
   const handleAddApiKey = async (values: any) => {
     try {
-      await settingsApi.addApiKey(values.vendor, values.api_key);
-      message.success('API key added successfully');
+      let apiKey = values.api_key;
+      
+      // For Generac, package OAuth tokens
+      if (values.vendor === 'Generac') {
+        // Create a JSON package with all OAuth data
+        const oauthData = {
+          user_id: values.generac_user_id,
+          access_token: values.api_key,
+          refresh_token: values.generac_refresh_token || null,
+          expires_in: values.generac_expires_in ? parseInt(values.generac_expires_in) : null,
+          token_type: 'Bearer',
+          created_at: new Date().toISOString()
+        };
+        
+        // Store as base64 encoded JSON in the api_key field
+        apiKey = btoa(JSON.stringify(oauthData));
+        
+        message.loading('Adding Generac access...', 0);
+      }
+      
+      await settingsApi.addApiKey(values.vendor, apiKey);
+      message.destroy();
+      message.success('Vendor access added successfully');
       setIsApiKeyModalOpen(false);
       apiKeyForm.resetFields();
       fetchApiKeys();
     } catch (error) {
-      message.error('Failed to add API key');
+      message.destroy();
+      message.error('Failed to add vendor access');
     }
   };
 
   const handleDeleteApiKey = async (id: string) => {
     Modal.confirm({
-      title: 'Delete API Key',
-      content: 'Are you sure you want to delete this API key?',
+      title: 'Delete Vendor Access',
+      content: 'Are you sure you want to delete this vendor access?',
       onOk: async () => {
         try {
           await settingsApi.deleteApiKey(id);
-          message.success('API key deleted');
+          message.success('Vendor access deleted');
           fetchApiKeys();
         } catch (error) {
-          message.error('Failed to delete API key');
+          message.error('Failed to delete vendor access');
         }
       },
     });
@@ -134,7 +156,7 @@ const Settings = () => {
       key: 'vendor',
     },
     {
-      title: 'Key (Masked)',
+      title: 'Credentials (Masked)',
       dataIndex: 'key_masked',
       key: 'key_masked',
       render: (text: string) => <Text code>{text}</Text>,
@@ -177,18 +199,18 @@ const Settings = () => {
     <div className="settings-page">
       <Title level={2}>Settings</Title>
 
-      {/* API Keys Management */}
+      {/* Access Management */}
       <Card
         title={
           <Space>
             <KeyOutlined />
-            <span>API Keys Management</span>
+            <span>Access Management</span>
           </Space>
         }
         style={{ marginBottom: 24 }}
       >
         <Paragraph type="secondary">
-          Manage your vendor API keys for data integration.
+          Manage vendor access credentials for data integration.
         </Paragraph>
 
         <div style={{ marginBottom: 16 }}>
@@ -197,7 +219,7 @@ const Settings = () => {
             icon={<PlusOutlined />}
             onClick={() => setIsApiKeyModalOpen(true)}
           >
-            Add New API Key
+            Add Vendor Access
           </Button>
         </div>
 
@@ -428,9 +450,9 @@ const Settings = () => {
         </div>
       </Card>
 
-      {/* Add API Key Modal */}
+      {/* Add Vendor Access Modal */}
       <Modal
-        title="Add New API Key"
+        title="Add Vendor Access"
         open={isApiKeyModalOpen}
         onCancel={() => {
           setIsApiKeyModalOpen(false);
@@ -438,39 +460,130 @@ const Settings = () => {
         }}
         footer={null}
       >
-        <Form form={apiKeyForm} layout="vertical" onFinish={handleAddApiKey}>
+        <Form 
+          form={apiKeyForm} 
+          layout="vertical" 
+          onFinish={handleAddApiKey}
+        >
           <Form.Item
             label="Vendor"
             name="vendor"
             rules={[{ required: true, message: 'Please select a vendor' }]}
           >
-            <Select placeholder="Select a vendor">
+            <Select 
+              placeholder="Select a vendor"
+              onChange={() => apiKeyForm.setFieldsValue({ api_key: undefined })}
+            >
               <Option value="SolarEdge">SolarEdge</Option>
-              <Option value="Enphase">Enphase</Option>
-              <Option value="Generac" disabled title="Coming Soon">
-                Generac (Coming Soon)
+              <Option value="Generac">Generac (PWRcell)</Option>
+              <Option value="Enphase" disabled title="Not available yet">
+                Enphase (Coming Soon)
               </Option>
-              <Option value="Tigo" disabled title="Coming Soon">
+              <Option value="Chint" disabled title="Not available yet">
+                Chint (Coming Soon)
+              </Option>
+              <Option value="Tigo" disabled title="Not available yet">
                 Tigo (Coming Soon)
               </Option>
-              <Option value="CPS" disabled title="Coming Soon - Partner onboarding required">
+              <Option value="CPS" disabled title="Not available yet">
                 CPS (Coming Soon)
               </Option>
             </Select>
           </Form.Item>
 
-          <Form.Item
-            label="API Key"
-            name="api_key"
-            rules={[{ required: true, message: 'Please enter your API key' }]}
-          >
-            <Input.Password placeholder="Enter your API key" />
+          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.vendor !== currentValues.vendor}>
+            {({ getFieldValue }) => {
+              const selectedVendor = getFieldValue('vendor');
+              const isGenerac = selectedVendor === 'Generac';
+              
+              if (isGenerac) {
+                // Generac uses OAuth tokens
+                return (
+                  <>
+                    <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+                      To get your credentials: Log in to <a href="https://pwrfleet.generac.com" target="_blank" rel="noopener noreferrer">pwrfleet.generac.com</a>, 
+                      open DevTools (F12) → Network tab → Find the "sites/paginated" request and copy the Fleet ID from the URL
+                    </Paragraph>
+                    
+                    <Form.Item
+                      label="Fleet ID"
+                      name="generac_user_id"
+                      rules={[{ required: true, message: 'Please enter your Fleet ID' }]}
+                      tooltip="Found in the API URL: /fleets/v4/{THIS_ID}/sites/paginated"
+                    >
+                      <Input 
+                        placeholder="e.g., 13c04608-ff34-4097-a6e3-0738072676d6" 
+                        autoComplete="off"
+                      />
+                    </Form.Item>
+                    
+                    <Form.Item
+                      label="Access Token"
+                      name="api_key"
+                      rules={[{ required: true, message: 'Please enter your Access Token' }]}
+                      tooltip="Found in the token response as 'accessToken'"
+                    >
+                      <Input.TextArea 
+                        placeholder="Paste your access token here" 
+                        autoComplete="off"
+                        rows={3}
+                      />
+                    </Form.Item>
+                    
+                    <Form.Item
+                      label="Refresh Token"
+                      name="generac_refresh_token"
+                      rules={[{ required: false }]}
+                      tooltip="Found in the token response as 'refreshToken' - allows automatic token renewal"
+                    >
+                      <Input.TextArea 
+                        placeholder="Paste your refresh token here (optional but recommended)" 
+                        autoComplete="off"
+                        rows={3}
+                      />
+                    </Form.Item>
+                    
+                    <Form.Item
+                      label="Expires In (seconds)"
+                      name="generac_expires_in"
+                      rules={[{ required: false }]}
+                      tooltip="Found in the token response as 'expiresIn' - typically 3600 (1 hour)"
+                    >
+                      <Input 
+                        placeholder="e.g., 3600" 
+                        autoComplete="off"
+                        type="number"
+                      />
+                    </Form.Item>
+                    
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      🔒 All tokens are encrypted and stored securely. Refresh token allows automatic renewal when access token expires.
+                    </Text>
+                  </>
+                );
+              } else {
+                // Other vendors use API key
+                return (
+                  <Form.Item
+                    label="API Key"
+                    name="api_key"
+                    rules={[{ required: true, message: 'Please enter your API key' }]}
+                    tooltip="Your vendor API key for authentication"
+                  >
+                    <Input.Password 
+                      placeholder="Enter your API key" 
+                      autoComplete="off"
+                    />
+                  </Form.Item>
+                );
+              }
+            }}
           </Form.Item>
 
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit">
-                Add Key
+                Add Access
               </Button>
               <Button onClick={() => {
                 setIsApiKeyModalOpen(false);

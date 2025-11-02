@@ -128,6 +128,11 @@ class SolarEdgeConnector(BaseConnector):
         Fetch site overview with current metrics
         
         Endpoint: GET /site/{siteId}/overview
+        
+        Note: SolarEdge API returns:
+        - Power values in Watts (W) - we convert to kW by dividing by 1000
+        - Energy values in Watt-hours (Wh) - we convert to kWh by dividing by 1000
+        - This means small values like 457 W become 0.457 kW (not 0 kW)
         """
         vendor_site_id = site_id.replace("se_", "")
         
@@ -135,13 +140,70 @@ class SolarEdgeConnector(BaseConnector):
         overview = data.get("overview", {})
         
         return {
-            "current_power_kw": overview.get("currentPower", {}).get("power", 0) / 1000,
-            "daily_energy_kwh": overview.get("lastDayData", {}).get("energy", 0) / 1000,
-            "monthly_energy_kwh": overview.get("lastMonthData", {}).get("energy", 0) / 1000,
-            "yearly_energy_kwh": overview.get("lastYearData", {}).get("energy", 0) / 1000,
-            "lifetime_energy_mwh": overview.get("lifeTimeData", {}).get("energy", 0) / 1000000,
+            "current_power_kw": overview.get("currentPower", {}).get("power", 0) / 1000,  # W to kW
+            "daily_energy_kwh": overview.get("lastDayData", {}).get("energy", 0) / 1000,  # Wh to kWh
+            "monthly_energy_kwh": overview.get("lastMonthData", {}).get("energy", 0) / 1000,  # Wh to kWh
+            "yearly_energy_kwh": overview.get("lastYearData", {}).get("energy", 0) / 1000,  # Wh to kWh
+            "lifetime_energy_mwh": overview.get("lifeTimeData", {}).get("energy", 0) / 1000000,  # Wh to MWh
             "last_update": overview.get("lastUpdateTime"),
         }
+    
+    def get_power_flow(self, site_id: str) -> Dict[str, Any]:
+        """
+        Fetch real-time power flow
+        
+        Endpoint: GET /site/{siteId}/currentPowerFlow
+        
+        Returns power flow between PV, battery, grid, and load.
+        This is the ACTUAL real-time production data that shows:
+        - What panels are producing (PV)
+        - What battery is doing (charging/discharging)
+        - What house is consuming (LOAD)
+        - What's flowing to/from grid (GRID)
+        
+        Note: SolarEdge returns power in Watts (W)
+        """
+        vendor_site_id = site_id.replace("se_", "")
+        
+        try:
+            data = self._make_request(f"/site/{vendor_site_id}/currentPowerFlow")
+            power_flow = data.get("siteCurrentPowerFlow", {})
+            
+            # Extract power values (in W, we convert to kW)
+            pv_power = power_flow.get("PV", {}).get("currentPower", 0)
+            load_power = power_flow.get("LOAD", {}).get("currentPower", 0)
+            grid_power = power_flow.get("GRID", {}).get("currentPower", 0)
+            storage_power = power_flow.get("STORAGE", {}).get("currentPower", 0)
+            
+            # Handle cases where values might be None
+            pv_power = float(pv_power) if pv_power is not None else 0.0
+            load_power = float(load_power) if load_power is not None else 0.0
+            grid_power = float(grid_power) if grid_power is not None else 0.0
+            storage_power = float(storage_power) if storage_power is not None else 0.0
+            
+            return {
+                "pv_power_kw": pv_power / 1000,  # W to kW
+                "load_power_kw": load_power / 1000,  # W to kW
+                "grid_power_kw": grid_power / 1000,  # W to kW (positive = importing, negative = exporting)
+                "storage_power_kw": storage_power / 1000,  # W to kW (positive = discharging, negative = charging)
+                "storage_level_percent": power_flow.get("STORAGE", {}).get("chargeLevel", 0),
+                "status": power_flow.get("STORAGE", {}).get("status", ""),
+                "last_update": power_flow.get("updateRefreshRate"),
+                "unit": "kW"
+            }
+        except Exception as e:
+            logger.warning(f"Failed to fetch power flow for {site_id}: {e}")
+            # Return zeros if power flow is not available
+            return {
+                "pv_power_kw": 0.0,
+                "load_power_kw": 0.0,
+                "grid_power_kw": 0.0,
+                "storage_power_kw": 0.0,
+                "storage_level_percent": 0,
+                "status": "unavailable",
+                "last_update": None,
+                "unit": "kW"
+            }
     
     def get_site_energy(
         self, 
